@@ -1,18 +1,19 @@
 ﻿using DevToys.Api;
 using System.ComponentModel.Composition;
+using System.Numerics;
 using static DevToys.Api.GUI;
 
 namespace DevToys.HammingDistance
 {
     [Export(typeof(IGuiTool))]
-    [Name("HammingDistance")]                                                         
+    [Name("HammingDistance")]
     [ToolDisplayInformation(
-        IconFontName = "FluentSystemIcons",                                       
-        IconGlyph = '\uf7f8',                                                     
-        GroupName = PredefinedCommonToolGroupNames.Testers,                    
+        IconFontName = "FluentSystemIcons",
+        IconGlyph = '\uf7f8',
+        GroupName = PredefinedCommonToolGroupNames.Testers,
         ResourceManagerAssemblyIdentifier = nameof(HammingDistanceResourceAssemblyIdentifier),
-        ResourceManagerBaseName = "DevToys.HammingDistance.Resource",                      
-        ShortDisplayTitleResourceName = nameof(Resource.ShortDisplayTitle),    
+        ResourceManagerBaseName = "DevToys.HammingDistance.Resource",
+        ShortDisplayTitleResourceName = nameof(Resource.ShortDisplayTitle),
         LongDisplayTitleResourceName = nameof(Resource.LongDisplayTitle),
         DescriptionResourceName = nameof(Resource.Description),
         AccessibleNameResourceName = nameof(Resource.AccessibleName),
@@ -22,12 +23,8 @@ namespace DevToys.HammingDistance
         private readonly IUIMultiLineTextInput _input1 = MultiLineTextInput("input1");
         private readonly IUIMultiLineTextInput _input2 = MultiLineTextInput("input2");
 
-        private readonly IUISelectDropDownList _inputType1 = SelectDropDownList("inputType1");
-        private readonly IUISelectDropDownList _inputType2 = SelectDropDownList("inputType2");
+        private readonly IUISingleLineTextInput _output = SingleLineTextInput("output");
 
-        private readonly IUIMultiLineTextInput _output = MultiLineTextInput("output");
-
-        private int _lastStringSet = -1;
 
         enum InputType
         {
@@ -38,54 +35,58 @@ namespace DevToys.HammingDistance
             Text
         }
 
+        private InputType _currInputType1 = InputType.Binary;
+        private InputType _currInputType2 = InputType.Binary;
+        private int _lastStringSet = -1;
+
+
         public UIToolView View => new(
             Stack()
                 .Vertical()
+                .LargeSpacing()
                 .WithChildren(
-                    // String 1
-                    Stack().Horizontal().WithChildren(
-                        Label().Style(UILabelStyle.BodyStrong).Text("String 1 *"),
-                        InfoBar("string1Info").Informational().Description("The first input string"),
-                        _inputType1
-                            .WithItems(
-                                Item(nameof(InputType.Binary), InputType.Binary),
-                                Item(nameof(InputType.Octal), InputType.Octal),
-                                Item(nameof(InputType.Decimal), InputType.Decimal),
-                                Item(nameof(InputType.Hexadecimal), InputType.Hexadecimal),
-                                Item(nameof(InputType.Text), InputType.Text))
-                            .Select(0)
-                    ),
-                    _input1.AlwaysWrap().HideCommandBar()
-                        .Text(string.Empty),
+                    _input1.AlwaysWrap()
+                        .Title("String 1 *")
+                        .Text(string.Empty)
+                        .OnTextChanged(_ => OnCalculate())
+                        .CommandBarExtraContent(
+                            Stack().Horizontal().WithChildren(
+                                Label().Text("Input Type: ").Style(UILabelStyle.Body),
+                                SelectDropDownList("inputType1")
+                                    .WithItems(
+                                        Item(nameof(InputType.Binary), InputType.Binary),
+                                        Item(nameof(InputType.Octal), InputType.Octal),
+                                        Item(nameof(InputType.Decimal), InputType.Decimal),
+                                        Item(nameof(InputType.Hexadecimal), InputType.Hexadecimal),
+                                        Item(nameof(InputType.Text), InputType.Text))
+                                    .Select(0)
+                                    .OnItemSelected(OnInputType1Changed)
+                                )
+                            ),
 
-                    // String 2
-                    Stack().Horizontal().WithChildren(
-                        Label().Style(UILabelStyle.BodyStrong).Text("String 2 *"),
-                        InfoBar("string2Info").Informational().Description("The second input string"),
-                        _inputType2
-                            .WithItems(
-                                Item(nameof(InputType.Binary), InputType.Binary),
-                                Item(nameof(InputType.Octal), InputType.Octal),
-                                Item(nameof(InputType.Decimal), InputType.Decimal),
-                                Item(nameof(InputType.Hexadecimal), InputType.Hexadecimal),
-                                Item(nameof(InputType.Text), InputType.Text))
-                            .Select(0)
-                    ),
-                    _input2.AlwaysWrap().HideCommandBar()
-                        .Text(string.Empty),
+                    _input2.AlwaysWrap()
+                        .Title("String 2 *")
+                        .Text(string.Empty)
+                        .OnTextChanged(_ => OnCalculate())
+                        .CommandBarExtraContent(
+                            Stack().Horizontal().WithChildren(
+                                Label().Text("Input Type: ").Style(UILabelStyle.Body),
+                                SelectDropDownList("inputType2")
+                                    .WithItems(
+                                        Item(nameof(InputType.Binary), InputType.Binary),
+                                        Item(nameof(InputType.Octal), InputType.Octal),
+                                        Item(nameof(InputType.Decimal), InputType.Decimal),
+                                        Item(nameof(InputType.Hexadecimal), InputType.Hexadecimal),
+                                        Item(nameof(InputType.Text), InputType.Text))
+                                    .Select(0)
+                                    .OnItemSelected(OnInputType2Changed)
+                                )
+                        ),
 
                     // Output
-                    Label().Style(UILabelStyle.BodyStrong).Text("Output"),
-                    _output.AlwaysWrap().HideCommandBar().ReadOnly().Text(string.Empty),
-
-                    // Buttons
-                    Stack().Horizontal().WithChildren(
-                        Button("calculateBtn")
-                            .AccentAppearance()
-                            .Icon("FluentSystemIcons", '\uF18D')
-                            .Text("Calculate")
-                            .OnClick(OnCalculateClicked)
-                    )
+                    _output.ReadOnly()
+                        .Title("Hamming Distance")
+                        .Text(string.Empty)
                 )
         );
 
@@ -100,21 +101,33 @@ namespace DevToys.HammingDistance
             }
         }
 
-        private void OnCalculateClicked()
+        private void OnInputType1Changed(IUIDropDownListItem? obj)
         {
+            _currInputType1 = obj?.Value is InputType it1 ? it1 : InputType.Text;
+            OnCalculate();
+        }
+
+        private void OnInputType2Changed(IUIDropDownListItem? obj)
+        {
+            _currInputType2 = obj?.Value is InputType it2 ? it2 : InputType.Text;
+            OnCalculate();
+        }
+
+        private void OnCalculate()
+        {
+            if (_input1.Text == string.Empty || _input2.Text == string.Empty)
+            {
+                _output.Text("Waiting for Input...");
+                return;
+            }
+
             try
             {
-                var string1 = _input1.Text;
-                var string2 = _input2.Text;
-
-                var inputType1 = _inputType1.SelectedItem?.Value is InputType it1 ? it1 : InputType.Text;
-                var inputType2 = _inputType2.SelectedItem?.Value is InputType it2 ? it2 : InputType.Text;
-
-                string bits1 = ToBitString(string1, inputType1);
-                string bits2 = ToBitString(string2, inputType2);
+                string bits1 = ToBitString(_input1.Text, _currInputType1);
+                string bits2 = ToBitString(_input2.Text, _currInputType2);
 
                 int distance = CalculateHammingDistance(bits1, bits2);
-                _output.Text($"Hamming Distance: {distance}");
+                _output.Text($"{distance}");
             }
             catch (Exception ex)
             {
@@ -131,14 +144,47 @@ namespace DevToys.HammingDistance
             return bits1.Zip(bits2, (a, b) => a != b ? 1 : 0).Sum();
         }
 
-        private static string ToBitString(string input, InputType type) => type switch
+        private static string StripWhitespace(string input) =>
+            new(input.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+        private static string TextToBitString(string input) =>
+            string.Concat(input.Select(c => Convert.ToString(c, 2).PadLeft(16, '0')));
+
+        private static string OctalToBitString(string input) =>
+            string.Concat(input.Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 8), 2).PadLeft(3, '0')));
+
+        private static string HexToBitString(string input) =>
+            string.Concat(input.Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 16), 2).PadLeft(4, '0')));
+
+        private static string BinaryToBitString(string input) =>
+            input.All(c => c is '0' or '1')
+                ? input
+                : throw new ArgumentException("Binary input must contain only 0s and 1s.");
+
+        private static string BigIntToBitString(string input)
         {
-            InputType.Binary => input.Replace(" ", ""),
-            InputType.Octal => string.Concat(input.Replace(" ", "").Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 8), 2).PadLeft(3, '0'))),
-            InputType.Decimal => Convert.ToString(long.Parse(input.Trim()), 2),
-            InputType.Hexadecimal => string.Concat(input.Replace(" ", "").Select(c => Convert.ToString(Convert.ToInt32(c.ToString(), 16), 2).PadLeft(4, '0'))),
-            _ => string.Concat(input.Select(c => Convert.ToString(c, 2).PadLeft(8, '0'))),
-        };
+            var n = BigInteger.Parse(input);
+            if (n < 0) throw new ArgumentException("Negative decimal values are not supported.");
+            if (n == 0) return "0";
+            var bits = new System.Text.StringBuilder();
+            while (n > 0) { bits.Insert(0, (char)('0' + (int)(n % 2))); n >>= 1; }
+            return bits.ToString();
+        }
+
+        private static string ToBitString(string input, InputType type)
+        {
+            if (type != InputType.Text)
+                input = StripWhitespace(input);
+
+            return type switch
+            {
+                InputType.Binary => BinaryToBitString(input),
+                InputType.Octal => OctalToBitString(input),
+                InputType.Decimal => BigIntToBitString(input),
+                InputType.Hexadecimal => HexToBitString(input),
+                _ => TextToBitString(input),
+            };
+        }
     }
 }
 
